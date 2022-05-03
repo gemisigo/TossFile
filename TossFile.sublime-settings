@@ -7,10 +7,14 @@
     //
     // "paths": [
     //     {
-    //         "/home/source1/": "/home/destination1/"
+    //         "source": "/home/source1/",
+    //         "destination": "/home/destination1/",
+    //         "flat": true
     //     },
     //     {
-    //         "/home/source2/": "/home/destination2/"
+    //         "source": "/home/source2/",
+    //         "destination": "/home/destination2/",
+    //         "flat": false
     //     }
     // ]
     //
@@ -19,10 +23,14 @@
     //
     // "paths": [
     //     {
-    //         "C:\\home\\source1\\": "C:\\home\\destination1\\"
+    //         "source": "C:\\home\\source1\\",
+    //         "destination": "C:\\home\\destination1\\",
+    //         "flat": true
     //     },
     //     {
-    //         "C:\\home\\source2\\": "C:\\home\\destination2\\"
+    //         "source": "C:\\home\\source2\\",
+    //         "destination": "C:\\home\\destination2\\",
+    //         "flat": true
     //     }
     // ]
     "paths": [
@@ -34,27 +42,27 @@
     // NOTE:
     //      - If you put quotes around this number it will be ignored and default back to 5 seconds
     //      - If you set this value to 0 it will be ignored and default back to 5 seconds
-    "statusTimeout": 5,
-    // Replace an exisiting file at the output location if it already exists
-    "replaceIfExists": true,
+    "status_timeout": 5,
+    // Replace an exisiting file at the destinations location if it already exists
+    "replace_if_exists": true,
     // List of extensions to ignore even if a path match is found
     // Example: [".jar", ".class"]
-    "extensionExcludes": [
+    "extension_excludes": [
 
     ],
     // List of file names to ignore even if a path match is found
     // Example: ["Fileone.class", "Filetwo.java"]
-    "nameExcludes": [
+    "name_excludes": [
 
     ],
-    // List of output paths to ignore even if a path match is found
+    // List of destination paths to ignore even if a path match is found
     // Example (based on *nix "paths" above): ["/home/destination1/build/", "home/destination1/topsecret/"]
-    "outputPathExcludes": [
+    "destination_path_excludes": [
 
     ],
-    // List of input paths to ignore even if a path match is found
+    // List of source paths to ignore even if a path match is found
     // Example (based on *nix "paths" above): ["/home/source1/build/", "home/source1/topsecret/"]
-    "inputPathExcludes": [
+    "source_path_excludes": [
 
     ]
 }

@@ -46,17 +46,17 @@ Windows
 
 Control how long the status message appears (in seconds) in the footer of the file the command was run in (default is 5)
 ```
-"statusTimeout": 5
+"status_timeout": 5
 ```
 
 Prevent overwrite exisiting file at the output location if it already exists (default is true)
 ```
-"replaceIfExists": false,
+"replace_if_exists": false,
 ```
 
 List of extensions to ignore even if a path match is found (default is empty list)
 ```
-"extensionExcludes": [
+"extension_excludes": [
     ".jar",
     ".zip",
     ".class"
@@ -65,7 +65,7 @@ List of extensions to ignore even if a path match is found (default is empty lis
 
 List of file names to ignore even if a path match is found (default is empty list)
 ```
-"nameExcludes": [
+"name_excludes": [
     "File1.class",
     "File1.java"
 ]
@@ -73,7 +73,7 @@ List of file names to ignore even if a path match is found (default is empty lis
 
 List of output paths to ignore even if a path match is found (default is empty list) (example output paths are based on *nix "paths" above)
 ```
-"outputPathExcludes": [
+"destination_path_excludes": [
     "/home/destination1/build/",
     "/home/destination1/topsecret/"
 ]
@@ -81,7 +81,7 @@ List of output paths to ignore even if a path match is found (default is empty l
 
 List of input paths to ignore even if a path match is found (default is empty list) (example output paths are based on *nix "paths" above)
 ```
-"inputPathExcludes": [
+"source_path_excludes": [
     "/home/source1/build/",
     "/home/source1/topsecret/"
 ]
