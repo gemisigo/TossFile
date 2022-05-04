@@ -42,9 +42,9 @@
     // NOTE:
     //      - If you put quotes around this number it will be ignored and default back to 5 seconds
     //      - If you set this value to 0 it will be ignored and default back to 5 seconds
-    "status_timeout": 5,
+    "status_timeout": 10,
     // Replace an exisiting file at the destinations location if it already exists
-    "replace_if_exists": true,
+    "replace_if_exists": false,
     // List of extensions to ignore even if a path match is found
     // Example: [".jar", ".class"]
     "extension_excludes": [
