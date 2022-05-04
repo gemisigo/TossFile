@@ -19,25 +19,27 @@ SETTINGS = [
     "status_timeout",
 ]
 
+ACTIONS = {
+    "create table": "new",
+    "alter table": "mod",
+    "usp_add_fk": "mod",
+    "usp_add_column": "mod",
+    "usp_add_constraint": "mod",
+    "usp_drop_fk": "mod",
+    "usp_drop_column": "mod",
+    "usp_drop_constraint": "mod",
+    "create view": "view",
+    "create procedure": "usp",
+    "create function": "udf",
+    "create schema": "schema"
+}
+
 def get_settings(view):
     # print("TossFile: load settings")
     plugin_name = "TossFile"
     mgp = "merge_global_"
     global_settings = sublime.load_settings("%s.sublime-settings" % plugin_name)
-    # print(f"global settings: {global_settings}")
     project_settings = view.settings().get(plugin_name, {})
-    # print(f"view: {view}")
-    # print(f"view.settings: {view.settings}")
-    # print(f"view.settings(): {view.settings()}")
-    # print(view.settings().get(plugin_name, {}))
-    # return {}
-    # plugin_name = "Shit"
-    # plugin_name = "TossFile"
-    # shit = view.settings().get(plugin_name, {})
-    # print(f"shit: {shit}, plugin_name: {plugin_name}")
-
-    # print(f"dict(view.settings()): {dict(view.settings())}")
-    # print(f"project settings: {project_settings}")
     combined_settings = {}
 
     for setting in SETTINGS:
@@ -63,10 +65,10 @@ class BaseTossFile(sublime_plugin.TextCommand):
         self.num_locations_tossed = 0
         self.num_files_skipped = 0
         self.num_locations_skipped = 0
+        self.num_files_abandoned = 0
         self.debug = True
         combined_settings = get_settings(self.view)
         self.debug_print(f"TossFile: combined settings: {combined_settings}")
-        # print(combined_settings["status_timeout"])
 
     def debug_print(self, stuff):
         if self.debug:
@@ -86,8 +88,8 @@ class BaseTossFile(sublime_plugin.TextCommand):
         skip_file_str = "file" if self.num_files_skipped == 1 else "files"
         skip_location_str = "location" if self.num_locations_skipped == 1 else "locations"
         tmpl = "$toss_file_type: tossed $num_files_tossed $toss_file_str to $num_locations_tossed $toss_location_str"
-        if self.num_files_skipped > 0:
-            tmpl = tmpl + "; settings made toss skip $num_files_skipped $skip_file_str at $num_locations_skipped $skip_location_str"
+        if self.num_files_skipped > 0 or self.num_files_abandoned > 0:
+            tmpl = tmpl + "; settings made toss skip $num_files_skipped $skip_file_str at $num_locations_skipped $skip_location_str, abandoned: $num_files_abandoned"
         status_template_str = Template(tmpl)
         return status_template_str.substitute(toss_file_type=self.toss_file_type,
                                               num_files_tossed=str(self.num_files_tossed),
@@ -97,7 +99,9 @@ class BaseTossFile(sublime_plugin.TextCommand):
                                               num_files_skipped=str(self.num_files_skipped),
                                               skip_file_str=skip_file_str,
                                               num_locations_skipped=str(self.num_locations_skipped),
-                                              skip_location_str=skip_location_str)
+                                              skip_location_str=skip_location_str,
+                                              num_files_abandoned=str(self.num_files_abandoned)
+                                              )
 
     def update_status(self):
         self.view.set_status("toss_file_status", self.get_status_str())
@@ -112,10 +116,6 @@ class BaseTossFile(sublime_plugin.TextCommand):
     def skip_existing_file(self, copy_to, replace_if_exists):
         skip = False
         combined_settings = get_settings(self.view)
-        # replace_if_exists = combined_settings.get("replace_if_exists", True)
-        # if type(replace_if_exists) != bool:
-            # replace_if_exists = True
-        # if not replace_if_exists:
         if os.path.isfile(copy_to) and not replace_if_exists:
             skip = True
         return skip
@@ -159,41 +159,70 @@ class BaseTossFile(sublime_plugin.TextCommand):
         combined_settings = get_settings(self.view)
         global_replace_if_exists = combined_settings.get("replace_if_exists", False)
         self.debug_print(f"file_name: {file_name}")
-        if not file_name:
-            for sel in self.view.sel():
-                selected = self.view.substr(sel)
-                self.debug_print(selected)
 
-        else: # if file_name:
-            paths = combined_settings.get("paths", [])
-            # print(f"paths: {paths}")
-            for path in paths:
-                source = path.get("source")
-                source = os.path.normpath(source) if source else None
-                destination = os.path.normpath(path["destination"])
-                replace_if_exists = path.get("replace_if_exists", global_replace_if_exists)
-                flat = path.get("flat", True if not source else False )
-                if source and file_name.startswith(source):
-                    if flat:
-                        copy_to = os.path.join(destination, os.path.split(file_name)[1])
-                    else:
-                        copy_to = file_name.replace(source, destination)
-                # if file_name.startswith(source):
-                #     copy_to = file_name.replace(source, destination)
-                    if self.skip(file_name, copy_to, replace_if_exists):
-                        self.num_locations_skipped = self.num_locations_skipped + 1
-                        if not is_file_skipped:
-                            self.num_files_skipped = self.num_files_skipped + 1
-                            is_file_skipped = True
-                    else:
-                        copy_to_dir = os.path.dirname(copy_to)
-                        if not os.path.exists(copy_to_dir):
-                            os.makedirs(copy_to_dir)
-                        shutil.copyfile(file_name, copy_to)
-                        self.num_locations_tossed = self.num_locations_tossed + 1
-                        if not is_file_tossed:
-                            self.num_files_tossed = self.num_files_tossed + 1
-                            is_file_tossed = True
+        paths = combined_settings.get("paths", [])
+        expanded_paths = []
+        unsaved_destinations = []
+        for path in paths:
+            source = path.get("source")
+            source = os.path.normpath(source) if source else None
+            destination = os.path.normpath(path["destination"])
+            self.debug_print(f"before source: [{source}], destination: [{destination}]")
+            if source and not os.path.isabs(source):
+                project_path = self.view.window().extract_variables()["project_path"]
+                source = os.path.join(project_path, source)
+            if not os.path.isabs(destination):
+                project_path = self.view.window().extract_variables()["project_path"]
+                destination = os.path.join(project_path, destination)
+            replace_if_exists = path.get("replace_if_exists", global_replace_if_exists)
+            flat = path.get("flat", True if not source else False )
+            self.debug_print(f"after source: [{source}], destination: [{destination}]")
+            # path["source"] = source
+            # path["destination"] = destination
+            # if not source:
+
+
+            if not source and not file_name:
+                # this part is extremely tailored to my needs for developing SQL
+                try:
+                    selections = self.view.sel()
+                    schema_name = self.view.substr(selections[0])
+                    action = self.view.substr(selections[1])
+                    object_name = self.view.substr(selections[2])
+                    new_file_name = f"{ACTIONS[action.lower()]}.{schema_name}.{object_name}.sql"
+                    new_file_path = os.path.join(destination, new_file_name)
+                    self.debug_print(f"destination: {destination}, default_dir prior: {self.view.settings().get('default_dir')}")
+                    self.view.settings().set("default_dir", destination)
+                    self.debug_print(f"destination: {destination}, default_dir after: {self.view.settings().get('default_dir')}")
+                    self.view.set_name(new_file_name)
+                    self.view.assign_syntax("Packages/User/Gem-SQL.sublime-syntax")
+                    self.view.run_command("save")
+                    self.view.retarget(new_file_path)
+                except IndexError as e:
+                    self.num_files_abandoned = self.num_files_abandoned + 1
+                    self.debug_print("IndexError")
+                    continue
+
+            elif source and file_name and file_name.startswith(source):
+                if flat:
+                    copy_to = os.path.join(destination, os.path.split(file_name)[1])
+                else:
+                    copy_to = file_name.replace(source, destination)
+                self.debug_print(f"copy to: {copy_to}")
+                if self.skip(file_name, copy_to, replace_if_exists):
+                    self.num_locations_skipped = self.num_locations_skipped + 1
+                    if not is_file_skipped:
+                        self.num_files_skipped = self.num_files_skipped + 1
+                        is_file_skipped = True
+                else:
+                    copy_to_dir = os.path.dirname(copy_to)
+                    if not os.path.exists(copy_to_dir):
+                        os.makedirs(copy_to_dir)
+                    shutil.copyfile(file_name, copy_to)
+                    self.num_locations_tossed = self.num_locations_tossed + 1
+                    if not is_file_tossed:
+                        self.num_files_tossed = self.num_files_tossed + 1
+                        is_file_tossed = True
 
 
 
