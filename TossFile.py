@@ -1,9 +1,10 @@
 from string import Template
 import os
+import re
 import shutil
 import sublime
 import sublime_plugin
-from TossFile import pyads
+from TossFile.pyads.pyads import ADS
 
 SETTINGS = [
     "merge_global_paths",
@@ -34,6 +35,18 @@ ACTIONS = {
     "create schema": "schema",
     "insert": "ibd"
 }
+
+action_pipe = "|".join(ACTIONS.keys()).lower()
+OPENING_DELIMITERS = "`'\"\\["
+CLOSING_DELIMITERS = "`'\"\\]"
+od = OPENING_DELIMITERS
+cd = CLOSING_DELIMITERS
+USE_PATTERN = f"(?:use\\s*[{od}]?(?P<schema1>\\w*)[{cd}]?;?)"
+ACTION_PATTERN = f"[{od}]?(?P<action>{action_pipe})[{cd}]?\\s*(\\(\\s*')?(?:[{od}](?P<schema2>\\w*)[{cd}]\\.[{od}](?P<object1>\\w*)[{cd}]|[{od}](?P<object2>\\w*)[{cd}])"
+
+def coalesce(*values):
+    """Return the first non-None value or None if all values are None"""
+    return next((v for v in values if v is not None), None)
 
 def get_settings(view):
     # print("TossFile: load settings")
@@ -70,6 +83,41 @@ class BaseTossFile(sublime_plugin.TextCommand):
         self.debug = True
         combined_settings = get_settings(self.view)
         self.debug_print(f"TossFile: combined settings: {combined_settings}")
+
+    def prepared_file_name(self, file_name):
+        if not file_name:
+            try:
+                buffer_content = self.view.substr(sublime.Region(0, self.view.size()))[0:200].lower()
+                selections = self.view.sel()
+                use_pattern = re.compile(USE_PATTERN)
+                action_pattern = re.compile(ACTION_PATTERN)
+
+                use_match = use_pattern.search(buffer_content[0:1000])
+                schema1 = use_match.group("schema1")
+
+                action_match = action_pattern.search(buffer_content)
+                action = action_match.group("action")
+                schema2 = action_match.group("schema2")
+                object1 = action_match.group("object1")
+                object2 = action_match.group("object2")
+
+                schema_name = coalesce(schema2, schema1)
+                object_name = coalesce(object2, object1)
+
+                self.debug_print(f"schema_name: {schema_name}")
+                self.debug_print(f"object_name: {object_name}")
+                self.debug_print(f"action: {action}")
+
+                new_file_name = f"{ACTIONS[action.lower()]}.{schema_name}.{object_name}.sql"
+                return (None, new_file_name) # (file_path, file_name)
+
+            except IndexError as e:
+                self.num_files_abandoned = self.num_files_abandoned + 1
+                self.debug_print("IndexError")
+                return None
+        else:
+            # return {"file_path": os.path.split(file_name)[0], "file_name": os.path.split(file_name)[1]}
+            return (os.path.split(file_name)[0], os.path.split(file_name)[1]) # (file_path, file_name)
 
     def debug_print(self, stuff):
         if self.debug:
@@ -154,24 +202,6 @@ class BaseTossFile(sublime_plugin.TextCommand):
                 break
         return skip
 
-    def prepared_file_name(self, file_name):
-        if not file_name:
-            try:
-                buffer_content = self.iew.substr(sublime.Region(0, self.view.size()))
-                selections = self.view.sel()
-                schema_name = self.view.substr(selections[0])
-                action = self.view.substr(selections[1])
-                object_name = self.view.substr(selections[2])
-                new_file_name = f"{ACTIONS[action.lower()]}.{schema_name}.{object_name}.sql"
-                # return {"file_path": None, "file_name": new_file_name}
-                return (None, new_file_name) # (file_path, file_name)
-            except IndexError as e:
-                self.num_files_abandoned = self.num_files_abandoned + 1
-                self.debug_print("IndexError")
-                return None
-        else:
-            # return {"file_path": os.path.split(file_name)[0], "file_name": os.path.split(file_name)[1]}
-            return (os.path.split(file_name)[0], os.path.split(file_name)[1]) # (file_path, file_name)
 
     def prepared_path(self, path, global_replace_if_exists):
         flat = path.get("flat", False)
