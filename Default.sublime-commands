@@ -5,6 +5,11 @@
         "command" : "toss_file"
     },
     {
+        "id" : "toss_external_file",
+        "caption" : "Toss External File",
+        "command" : "toss_external_file"
+    },
+    {
         "id" : "toss_all_files",
         "caption" : "Toss All Files",
         "command" : "toss_all_files"

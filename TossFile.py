@@ -4,6 +4,7 @@ import re
 import shutil
 import sublime
 import sublime_plugin
+import inspect
 from TossFile.pyads.pyads import ADS
 
 SETTINGS = [
@@ -23,6 +24,7 @@ SETTINGS = [
 ACTIONS = {
     "create table": "new",
     "alter table": "mod",
+    "alter procedure": "mod",
     "usp_add_fk": "mod",
     "usp_add_column": "mod",
     "usp_add_constraint": "mod",
@@ -30,10 +32,17 @@ ACTIONS = {
     "usp_drop_column": "mod",
     "usp_drop_constraint": "mod",
     "create view": "view",
+    "create or replace view": "view",
     "create procedure": "usp",
+    "create or replace procedure": "usp",
     "create function": "udf",
+    "create or replace function": "udf",
     "create schema": "schema",
-    "insert": "ibd"
+    "create or replace schema": "schema",
+    "insert": "ibd",
+    "insert into": "ibd",
+    "insert ignore into": "ibd",
+    "tt_ibd": "ibd"
 }
 
 action_pipe = "|".join(ACTIONS.keys()).lower()
@@ -41,8 +50,14 @@ OPENING_DELIMITERS = "`'\"\\["
 CLOSING_DELIMITERS = "`'\"\\]"
 od = OPENING_DELIMITERS
 cd = CLOSING_DELIMITERS
-USE_PATTERN = f"(?:use\\s*[{od}]?(?P<schema1>\\w*)[{cd}]?;?)"
-ACTION_PATTERN = f"[{od}]?(?P<action>{action_pipe})[{cd}]?\\s*(\\(\\s*')?(?:[{od}](?P<schema2>\\w*)[{cd}]\\.[{od}](?P<object1>\\w*)[{cd}]|[{od}](?P<object2>\\w*)[{cd}])"
+USE_PATTERN = f"(?i)(?:use\\s*[{od}]?(?P<schema1>\\w*)[{cd}]?;?)"
+# ACTION_PATTERN = f"[{od}]?(?P<action>{action_pipe})[{cd}]?\\s*(\\(\\s*')?(?:[{od}](?P<schema2>\\w*)[{cd}]\\.[{od}](?P<object1>\\w*)[{cd}]|[{od}](?P<object2>\\w*)[{cd}])"
+# ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\\s+(?:[{od}](?P<schema>.*?)[{cd}]\\.)?(?:[{od}](?P<object>.*?)[{cd}])"
+# ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?(?:\s+LIKE)\s+(?:[{od}](?P<schema>.*?)[{cd}]\.)?(?:[{od}](?P<object>.*?)[{cd}])"
+# ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\s+(?:(IF NOT EXISTS|LIKE)\s+)?(?:[{od}]?(?P<schema>[^{cd}]*)[{cd}]?\.)?(?:[{od}]?(?P<object>[^{cd}]*[{cd}]?))"
+ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\s+(?:(IF NOT EXISTS|LIKE)\s+)?(?:[{od}]?(?P<schema>[^{cd}]*)[{cd}]?\.)?(?:[{od}]?(?P<object>[^{cd}]+)[{cd}]?)"
+
+
 
 def coalesce(*values):
     """Return the first non-None value or None if all values are None"""
@@ -73,6 +88,16 @@ def get_settings(view):
 
 
 class BaseTossFile(sublime_plugin.TextCommand):
+
+    debug_level = 10
+
+    def printd(self, text: str, debug_level: int = 20, end: str = "\n"):
+        """Print debug"""
+        if self.debug_level <= debug_level:
+            caller = inspect.stack()[1][3]  # will give the caller of foos name, if something called foo
+            dname = f"{self.__class__.__name__}.{caller} [{debug_level}]"
+            print(f"{dname}: {text}", end = end)
+
     def init_toss(self, toss_type):
         self.toss_file_type = toss_type
         self.num_files_tossed = 0
@@ -82,46 +107,57 @@ class BaseTossFile(sublime_plugin.TextCommand):
         self.num_files_abandoned = 0
         self.debug = True
         combined_settings = get_settings(self.view)
-        self.debug_print(f"TossFile: combined settings: {combined_settings}")
+        self.printd(f"{combined_settings=}")
 
     def prepared_file_name(self, file_name):
         if not file_name:
             try:
-                buffer_content = self.view.substr(sublime.Region(0, self.view.size()))[0:200].lower()
+                buffer_content = self.view.substr(sublime.Region(0, self.view.size()))[0:1000].lower()
                 selections = self.view.sel()
                 use_pattern = re.compile(USE_PATTERN)
                 action_pattern = re.compile(ACTION_PATTERN)
 
+                self.printd(f"{USE_PATTERN=}")
+                self.printd(f"{ACTION_PATTERN=}")
+
                 use_match = use_pattern.search(buffer_content[0:1000])
-                schema1 = use_match.group("schema1")
+                self.printd(f"{use_match=}")
+                schema_name = use_match.group("schema1")
+                self.printd(f"{schema_name=}")
 
                 action_match = action_pattern.search(buffer_content)
+                self.printd(f"{action_match=}")
                 action = action_match.group("action")
-                schema2 = action_match.group("schema2")
-                object1 = action_match.group("object1")
-                object2 = action_match.group("object2")
+                self.printd(f"{action=}")
+                # schema2 = action_match.group("schema2")
+                # self.printd(f"{schema2=}")
+                # object1 = action_match.group("object1")
+                # self.printd(f"{object1=}")
+                # object2 = action_match.group("object2")
+                # self.printd(f"{object2=}")
 
-                schema_name = coalesce(schema2, schema1)
-                object_name = coalesce(object2, object1)
+                # schema_name = action_match.group("schema")
+                # self.printd(f"{schema_name=}")
+                object_name = action_match.group("object")
+                self.printd(f"{object_name=}")
 
-                self.debug_print(f"schema_name: {schema_name}")
-                self.debug_print(f"object_name: {object_name}")
-                self.debug_print(f"action: {action}")
+                # schema_name = coalesce(schema2, schema1)
+                # object_name = coalesce(object2, object1)
+
+                self.printd(f"{action=}")
 
                 new_file_name = f"{ACTIONS[action.lower()]}.{schema_name}.{object_name}.sql"
+                self.printd(f"{new_file_name=}")
+
                 return (None, new_file_name) # (file_path, file_name)
 
             except IndexError as e:
                 self.num_files_abandoned = self.num_files_abandoned + 1
-                self.debug_print("IndexError")
+                self.printd("IndexError")
                 return None
         else:
             # return {"file_path": os.path.split(file_name)[0], "file_name": os.path.split(file_name)[1]}
             return (os.path.split(file_name)[0], os.path.split(file_name)[1]) # (file_path, file_name)
-
-    def debug_print(self, stuff):
-        if self.debug:
-            print(f"TossFile debug: --[ {stuff} ]--")
 
     def get_status_timeout(self):
         combined_settings = get_settings(self.view)
@@ -220,13 +256,16 @@ class BaseTossFile(sublime_plugin.TextCommand):
         return (source, destination, replace_if_exists, flat)
 
 
-    def toss(self, file_name):
+    def toss(self, file_name, debug = False):
         is_file_tossed = False
         is_file_skipped = False
         combined_settings = get_settings(self.view)
         global_replace_if_exists = combined_settings.get("replace_if_exists", False)
-        self.debug_print(f"file_name: {file_name}")
+        self.printd(f"{file_name=}")
+        if debug:
+            return "DOA"
 
+        self.printd(f"{file_name=}")
         file_path, new_file_name = self.prepared_file_name(file_name)
         all_paths = combined_settings.get("paths", [])
 
@@ -238,7 +277,7 @@ class BaseTossFile(sublime_plugin.TextCommand):
             paths = (self.prepared_path(p, global_replace_if_exists) for p in all_paths if p.get("source") is None)
 
         paths = list(paths)
-        self.debug_print(f"paths: {paths}")
+        self.printd(f"{paths=}")
         for source, destination, replace_if_exists, flat in paths:
             if not source:
                 self.view.settings().set("default_dir", destination)
@@ -269,6 +308,10 @@ class BaseTossFile(sublime_plugin.TextCommand):
                             self.num_files_tossed = self.num_files_tossed + 1
                             is_file_tossed = True
 
+class TossExternalFileCommand(BaseTossFile):
+    def run(self, edit, file_name, **kwargs):
+        self.init_toss("")
+
 class TossFileCommand(BaseTossFile):
     def run(self, edit, **kwargs):
         self.init_toss("Toss File")
@@ -280,6 +323,7 @@ class TossAllFilesCommand(BaseTossFile):
     def run(self, edit, **kwargs):
         self.init_toss("Toss All Files")
         open_views = self.view.window().views()
-        # for x in open_views:
-            # self.toss(x.file_name())
+        for x in open_views:
+            if x.name() != "TodoReview":
+                self.toss(x.file_name(), True)
         self.update_status()

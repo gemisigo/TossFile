@@ -1,0 +1,28 @@
+{
+	"folders": [
+		{"name": "root", "path": ".",}
+	],
+	"settings": {
+		"Shit": {"x": 10},
+		"TossFile": {
+			"merge_global_paths": true,
+			"paths": [
+				{
+					"source": ".",
+					"destination": "f:/ide/ide",
+					// "flat": true
+				},
+				{
+					"destination": "f:/ide/ode/_new"
+				},
+				{
+					"source": "innen",
+					"destination": "ide",
+					"flat": false,
+					"replace_if_exists": false
+				},
+			],
+			"status_timeout": 50
+		}
+	}
+}
