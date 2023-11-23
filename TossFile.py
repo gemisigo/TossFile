@@ -55,7 +55,7 @@ USE_PATTERN = f"(?i)(?:use\\s*[{od}]?(?P<schema1>\\w*)[{cd}]?;?)"
 # ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\\s+(?:[{od}](?P<schema>.*?)[{cd}]\\.)?(?:[{od}](?P<object>.*?)[{cd}])"
 # ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?(?:\s+LIKE)\s+(?:[{od}](?P<schema>.*?)[{cd}]\.)?(?:[{od}](?P<object>.*?)[{cd}])"
 # ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\s+(?:(IF NOT EXISTS|LIKE)\s+)?(?:[{od}]?(?P<schema>[^{cd}]*)[{cd}]?\.)?(?:[{od}]?(?P<object>[^{cd}]*[{cd}]?))"
-ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\s+(?:(IF NOT EXISTS|LIKE)\s+)?(?:[{od}]?(?P<schema>[^{cd}]*)[{cd}]?\.)?(?:[{od}]?(?P<object>[^{cd}]+)[{cd}]?)"
+ACTION_PATTERN = f"(?i)[{od}]?(?P<action>({action_pipe}))[{cd}]?\s+(?:(IF NOT EXISTS|LIKE)\s+)?(?:[{od}]?(?P<schema>[^{cd}]*)[{cd}]?\.)?(?:[{od}]?(?P<object>[^{cd}]+)[{cd}]?)"
 
 
 
@@ -112,7 +112,7 @@ class BaseTossFile(sublime_plugin.TextCommand):
     def prepared_file_name(self, file_name):
         if not file_name:
             try:
-                buffer_content = self.view.substr(sublime.Region(0, self.view.size()))[0:1000].lower()
+                buffer_content = self.view.substr(sublime.Region(0, self.view.size()))[0:4000].lower()
                 selections = self.view.sel()
                 use_pattern = re.compile(USE_PATTERN)
                 action_pattern = re.compile(ACTION_PATTERN)
@@ -120,7 +120,7 @@ class BaseTossFile(sublime_plugin.TextCommand):
                 self.printd(f"{USE_PATTERN=}")
                 self.printd(f"{ACTION_PATTERN=}")
 
-                use_match = use_pattern.search(buffer_content[0:1000])
+                use_match = use_pattern.search(buffer_content[0:4000])
                 self.printd(f"{use_match=}")
                 schema_name = use_match.group("schema1")
                 self.printd(f"{schema_name=}")
