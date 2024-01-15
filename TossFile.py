@@ -50,13 +50,12 @@ OPENING_DELIMITERS = "`'\"\\["
 CLOSING_DELIMITERS = "`'\"\\]"
 od = OPENING_DELIMITERS
 cd = CLOSING_DELIMITERS
-USE_PATTERN = f"(?i)(?:use\\s*[{od}]?(?P<schema1>\\w*)[{cd}]?;?)"
+USE_PATTERN = f"(?i)(?:use\\s*[{od}]?(?P<schema1>[\\(" + "\\{\\}" + f"\\)\\!\\w]*)[{cd}]?;?)"
 # ACTION_PATTERN = f"[{od}]?(?P<action>{action_pipe})[{cd}]?\\s*(\\(\\s*')?(?:[{od}](?P<schema2>\\w*)[{cd}]\\.[{od}](?P<object1>\\w*)[{cd}]|[{od}](?P<object2>\\w*)[{cd}])"
 # ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\\s+(?:[{od}](?P<schema>.*?)[{cd}]\\.)?(?:[{od}](?P<object>.*?)[{cd}])"
 # ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?(?:\s+LIKE)\s+(?:[{od}](?P<schema>.*?)[{cd}]\.)?(?:[{od}](?P<object>.*?)[{cd}])"
 # ACTION_PATTERN = f"(?i)[{od}]?(?P<action>(${action_pipe}))[{cd}]?\s+(?:(IF NOT EXISTS|LIKE)\s+)?(?:[{od}]?(?P<schema>[^{cd}]*)[{cd}]?\.)?(?:[{od}]?(?P<object>[^{cd}]*[{cd}]?))"
 ACTION_PATTERN = f"(?i)[{od}]?(?P<action>({action_pipe}))[{cd}]?\s+(?:(IF NOT EXISTS|LIKE)\s+)?(?:[{od}]?(?P<schema>[^{cd}]*)[{cd}]?\.)?(?:[{od}]?(?P<object>[^{cd}]+)[{cd}]?)"
-
 
 
 def coalesce(*values):
@@ -69,12 +68,22 @@ def get_settings(view):
     mgp = "merge_global_"
     global_settings = sublime.load_settings("%s.sublime-settings" % plugin_name)
     project_settings = view.settings().get(plugin_name, {})
+    # > load settings
+    todoreview_settings = view.settings().get("TodoReview", {})
+    replacements = todoreview_settings.get("version_placeholders", {})
     combined_settings = {}
 
     for setting in SETTINGS:
         combined_settings[setting] = global_settings.get(setting)
+    # >> print settings
+    # todo: implement global debugprint
+    # self.printd(f"\n\n\n{global_settings=}\n\n\n")
+    # self.printd(f"\n\n\n{project_settings=}\n\n\n")
+    # self.printd(f"\n\n\n{todoreview_settings=}\n\n\n")
+    # self.printd(f"\n\n\n{replacements=}\n\n\n")
+    # self.printd(f"\n\n\n{combined_settings=}\n\n\n")
+    # self.printd(f"project settings: {project_settings}")
 
-    # print(f"project settings: {project_settings}")
     for key in project_settings:
         # print(f"project key: {key}")
         if key in SETTINGS:
@@ -84,12 +93,13 @@ def get_settings(view):
                 combined_settings[key] = project_settings[key]
         else:
             print(f"TossFile: Invalid key [{key}] in project settings.")
+    combined_settings["replacements"] = replacements
     return combined_settings
 
 
 class BaseTossFile(sublime_plugin.TextCommand):
 
-    debug_level = 10
+    debug_level = 30
 
     def printd(self, text: str, debug_level: int = 20, end: str = "\n"):
         """Print debug"""
@@ -106,13 +116,14 @@ class BaseTossFile(sublime_plugin.TextCommand):
         self.num_locations_skipped = 0
         self.num_files_abandoned = 0
         self.debug = True
-        combined_settings = get_settings(self.view)
-        self.printd(f"{combined_settings=}")
+        self.combined_settings = get_settings(self.view)
+        self.printd(f"{self.combined_settings=}")
 
     def prepared_file_name(self, file_name):
         if not file_name:
             try:
-                buffer_content = self.view.substr(sublime.Region(0, self.view.size()))[0:4000].lower()
+                buffer_content = self.view.substr(sublime.Region(0, self.view.size()))[0:4000]
+                buffer_content_lower = buffer_content.lower()
                 selections = self.view.sel()
                 use_pattern = re.compile(USE_PATTERN)
                 action_pattern = re.compile(ACTION_PATTERN)
@@ -120,12 +131,12 @@ class BaseTossFile(sublime_plugin.TextCommand):
                 self.printd(f"{USE_PATTERN=}")
                 self.printd(f"{ACTION_PATTERN=}")
 
-                use_match = use_pattern.search(buffer_content[0:4000])
+                use_match = use_pattern.search(buffer_content)
                 self.printd(f"{use_match=}")
                 schema_name = use_match.group("schema1")
                 self.printd(f"{schema_name=}")
 
-                action_match = action_pattern.search(buffer_content)
+                action_match = action_pattern.search(buffer_content_lower)
                 self.printd(f"{action_match=}")
                 action = action_match.group("action")
                 self.printd(f"{action=}")
@@ -147,6 +158,8 @@ class BaseTossFile(sublime_plugin.TextCommand):
                 self.printd(f"{action=}")
 
                 new_file_name = f"{ACTIONS[action.lower()]}.{schema_name}.{object_name}.sql"
+                for key, value in self.combined_settings.get("replacements").items():
+                    new_file_name = new_file_name.replace(key, value)
                 self.printd(f"{new_file_name=}")
 
                 return (None, new_file_name) # (file_path, file_name)
